@@ -434,7 +434,7 @@ def runMain(link, list_IMDB, jumlah_list):
 try:
     link = "https://www.imdb.com/search/title/?title_type=feature&num_votes=25000,&genres=action&sort=user_rating,desc&start="
 
-    jumlah_list = 9
+    jumlah_list = 10
     list_IMDB = []
 
     runMain(link, list_IMDB, jumlah_list)
