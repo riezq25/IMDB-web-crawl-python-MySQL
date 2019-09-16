@@ -54,14 +54,33 @@ def cekMovieSQL(type, id_item, id_movie):
     except Error as error:
         print(error)
 
+def insertIMDBa(type, id_item, nama_item,dob, pob, dod, pod, bn, height, bio, poster, link_item):
+    try:
+        sql = ""
+        if(type == "aktor"):
+            sql = "INSERT INTO `imdb_cast` (`id_cast`, `nama_cast`, `dob_cast`, `pob_cast`, `dod_cast`, `pod_cast`, `birth_name_cast`, `height_cast`, `bio_cast`, `poster_cast`, `link_cast`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+
+        elif(type == "sutradara"):
+            sql = "INSERT INTO `imdb_director` (`id_director`, `nama_director`, `dob_director`, `pob_director`, `dod_director`, `pod_director`, `birth_name_director`, `height_director`, `bio_director`, `poster_director`, `link_director`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        
+
+        val = (id_item, nama_item,dob, pob, dod, pod, bn, height, bio, poster, link_item)
+        imdb_cursor.execute(sql, val)
+        imdb_db.commit()
+        print(nama_item, "inserted.")
+
+    except Error as error:
+        print(error)
 
 def insertIMDB(type, id_item, nama_item, link_item):
     try:
         sql = ""
         if(type == "aktor"):
-            sql = "INSERT INTO `imdb_cast` (`id_cast`, `nama_cast`, `link_cast`) VALUES (%s, %s, %s)"
+            sql = "INSERT INTO `imdb_cast` (`id_cast`, `nama_cast`,`link_cast`) VALUES (%s, %s, %s)"
+
         elif(type == "sutradara"):
             sql = "INSERT INTO `imdb_director` (`id_director`, `nama_director`, `link_director`) VALUES (%s, %s, %s)"
+        
 
         val = (id_item, nama_item, link_item)
         imdb_cursor.execute(sql, val)
@@ -71,13 +90,12 @@ def insertIMDB(type, id_item, nama_item, link_item):
     except Error as error:
         print(error)
 
-
 def verifikasiMovie(type_item, id_item, id_movie):
     if(cekMovieSQL(type_item, id_item, id_movie) == None):
         insertMovieSQL(type_item, id_item, id_movie)
 
 
-def checkInsertIMDB(type_item, item, id_movie):
+def checkInsertIMDB(type_item, item, id_item):
     for i in range(0, len(item)):
         # print(aktor[i]['nama_aktor']).
         if(type_item == "aktor"):
@@ -91,12 +109,12 @@ def checkInsertIMDB(type_item, item, id_movie):
 
         if(checkItemIMDB(type_item, id_item, nama_item) == None):
             insertIMDB(type_item, id_item, nama_item, link_item)
-        verifikasiMovie(type_item, id_item, id_movie)
+        verifikasiMovie(type_item, id_item, id_item)
 
 
 def checkInsertGenre(genre, id_movie):
     for i in range(0, len(genre)):
-        a=genre[i].strip()
+        a = genre[i].strip()
         if(checkGenreIMDB(a) == None):
             insertGenreIMDB(a)
             #checkInsertGenre(b, id_movie)
@@ -196,6 +214,81 @@ def checkMovie(id_movie, judul_movie):
         print(error)
 
 
+def getBio(link):
+    bio_data = {}
+    url = link+"bio"
+    poster = link
+    source = requests.get(url).text
+    source_poster = requests.get(poster).text
+
+    soup = bs4.BeautifulSoup(source, 'html.parser')
+    soup_poster = bs4.BeautifulSoup(source_poster, 'html.parser')
+
+    overview = soup.find(id='overviewTable').findAll('tr')
+
+    bio_poster = soup_poster.find(id='name-poster')['src']
+
+    bio_data['bio_poster'] = bio_poster
+
+    for a in range(0, len(overview)):
+        label = str(overview[a].find(
+            'td', {'class': 'label'}).get_text()).strip().replace(' ', '_').lower()
+
+        if (label == 'born'):
+            dob = overview[a].findAll('td')[1].find('time')
+            pob = overview[a].findAll('td')[1].findAll('a')
+
+            bio_data['dob'] = dob['datetime']
+            bio_data['pob'] = pob[2].get_text(strip=True)
+
+        if (label == 'died'):
+            dod = overview[a].findAll('td')[1].find('time')
+            pod = overview[a].findAll('td')[1].findAll('a')
+
+            bio_data['dod'] = dod['datetime']
+            bio_data['pod'] = pod[2].get_text(strip=True)
+
+        if (label == 'birth_name'):
+            bn = overview[a].findAll('td')[1].get_text()
+
+            bio_data['birth_name'] = bn
+
+        if (label == 'height'):
+            height = overview[a].findAll('td')[1].get_text(strip=True)
+
+            bio_data['height'] = height.replace(u'\xa0', u' ')
+
+        if(isKey(bio_data, 'dob') == False):
+            bio_data['dob'] = None
+        if(isKey(bio_data, 'pob') == False):
+            bio_data['pob'] = None
+        if(isKey(bio_data, 'dod') == False):
+            bio_data['dod'] = None
+        if(isKey(bio_data, 'pod') == False):
+            bio_data['pod'] = None
+        if(isKey(bio_data, 'birth_name') == False):
+            bio_data['birth_name'] = None
+        if(isKey(bio_data, 'height') == False):
+            bio_data['height'] = None
+        if(isKey(bio_data, 'bio_poster') == False):
+            bio_data['bio_poster'] = None
+
+    bio = soup.find_all('div', {'class': 'soda odd'})[
+        0].find('p').get_text(strip=True)
+    bio_data['bio'] = bio
+
+    return bio_data
+
+
+def isKey(dict, key):
+    if key in dict.keys():
+        inkey = True
+    else:
+        inkey = False
+
+    return inkey
+
+
 def crawl_movie_item(blok_movie, blok_poster):
 
     movie_item_data = {}
@@ -269,12 +362,13 @@ def crawl_movie_item(blok_movie, blok_poster):
         movie_item_data['poster'] = None
 
     try:
-        data_genre=blok_movie.find('span', {'class': 'genre'}).contents[0].strip().split(',')
-        genre_list={}
-        for i in range(0,len(data_genre)):
-            genre_list[i]=data_genre[i]
+        data_genre = blok_movie.find(
+            'span', {'class': 'genre'}).contents[0].strip().split(',')
+        genre_list = {}
+        for i in range(0, len(data_genre)):
+            genre_list[i] = data_genre[i]
 
-        #print(genre_list)      
+        # print(genre_list)
 
         movie_item_data['genre'] = genre_list
     except:
@@ -303,8 +397,27 @@ def crawl_movie_item(blok_movie, blok_poster):
             link_sutradara = "https://www.imdb.com" + \
                 sutradara_link[iz]['href'].strip()
 
+            bio = getBio(link_sutradara)
+            poster_sutradara = bio['bio_poster']
+            dob_sutradara = bio['dob']
+            pob_sutradara = bio['pob']
+            dod_sutradara = bio['dod']
+            pod_sutradara = bio['pod']
+            birth_name_sutradara = bio['birth_name']
+            height_sutradara = bio['height']
+            bio_sutradara = bio['bio']
+
             data_sutradara[iz] = {'id_sutradara': id_sutradara,
-                                  'nama_sutradara': nama_sutradara, 'link_sutradara': link_sutradara}
+                                  'nama_sutradara': nama_sutradara,
+                                  'dob_sutradara':dob_sutradara,
+                                  'pob_sutradara':pob_sutradara,
+                                  'dod_sutradara':dod_sutradara,
+                                  'pod_sutradara':pod_sutradara,
+                                  'birth_name_sutradara':birth_name_sutradara,
+                                  'height_sutradara':height_sutradara,
+                                  'bio_sutradara':bio_sutradara,
+                                  'poster_sutradara':poster_sutradara, 
+                                  'link_sutradara': link_sutradara,}
 
         # print(data_sutradara)
 
@@ -331,8 +444,27 @@ def crawl_movie_item(blok_movie, blok_poster):
             link_aktor = "https://www.imdb.com" + \
                 aktor_link[dir_len]['href'].strip()
 
+            bio = getBio(link_aktor)
+            poster_aktor = bio['bio_poster']
+            dob_aktor = bio['dob']
+            pob_aktor = bio['pob']
+            dod_aktor = bio['dod']
+            pod_aktor = bio['pod']
+            birth_name_aktor = bio['birth_name']
+            height_aktor = bio['height']
+            bio_aktor = bio['bio']
+
             data_aktor[iz] = {'id_aktor': id_aktor,
-                              'nama_aktor': nama_aktor, 'link_aktor': link_aktor}
+                              'nama_aktor': nama_aktor, 
+                              'dob_aktor':dob_aktor,
+                              'pob_aktor':pob_aktor,
+                              'dod_aktor':dod_aktor,
+                              'pod_aktor':pod_aktor,
+                              'birth_name_aktor':birth_name_aktor,
+                              'height_aktor':height_aktor,
+                              'bio_aktor':bio_aktor,
+                              'poster_aktor':poster_aktor,
+                              'link_aktor': link_aktor}
             dir_len += 1
 
         # print(data_aktor)
@@ -364,10 +496,25 @@ def crawl_hal_movie(blok_movie, blok_poster):
     return page_movie_data
 
 
+def getMaxTitle(link):
+    url = link
+    source = requests.get(url).text
+    soup = bs4.BeautifulSoup(source, 'html.parser')
+    num_title = soup.findAll('div', {'class': 'desc'})[0].findAll('span')[
+        0].get_text().split(' ')[2].replace(',', '')
+    return int(num_title)
+
+
 def crawl_main_IMDB(link, jml_movie):
 
     target_link = link
-    target = jml_movie
+
+    max_num = getMaxTitle(link)
+
+    if(max_num < jml_movie):
+        target = max_num
+    else:
+        target = jml_movie
 
     jml_awal_hal_movie_now = 0
     jml_akhir_hal_movie_now = 0
@@ -391,10 +538,10 @@ def crawl_main_IMDB(link, jml_movie):
         movie_data.extend(crawl_hal_movie(blok_movie, blok_poster))
 
         jml_awal_hal_movie_now = int(soup.find("div", {"class": "nav"}).find(
-            "div", {"class": "desc"}).contents[1].get_text().split("-")[0])
+            "div", {"class": "desc"}).contents[1].get_text().split("-")[0].replace(',', ''))
 
         jml_akhir_hal_movie_now = int(soup.find("div", {"class": "nav"}).find(
-            "div", {"class": "desc"}).contents[1].get_text().split("-")[1].split(" ")[0])
+            "div", {"class": "desc"}).contents[1].get_text().split("-")[1].split(" ")[0].replace(',', ''))
 
         jml_movie_tersisa = target - jml_akhir_hal_movie_now
 
@@ -410,7 +557,7 @@ def crawl_main_IMDB(link, jml_movie):
     return movie_data
 
 
-def runMain(link, list_IMDB, jumlah_list):
+def runMain(link, jumlah_list):
     list_IMDB = crawl_main_IMDB(link, jumlah_list)
 
     limit = jumlah_list
@@ -428,7 +575,7 @@ def runMain(link, list_IMDB, jumlah_list):
             checkInsertIMDB("sutradara", item['sutradara'], item['id'])
 
             limit -= 1
-    #print(list_IMDB[5])
+    # print(list_IMDB[5])
 
 
 try:
@@ -437,7 +584,10 @@ try:
     jumlah_list = 10
     list_IMDB = []
 
-    runMain(link, list_IMDB, jumlah_list)
+    #aa=getBio("https://www.imdb.com/name/nm0001508/")
+
+    #print(aa)
+    runMain(link, jumlah_list)
 
 
 except KeyboardInterrupt:
